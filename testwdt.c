@@ -5,8 +5,13 @@
 #define PIN_LED3 PB3
 #define PIN_LED4 PB4
 
-uint8_t tk1, tk2, tk3, tk4 ;
+#define TASK_COUNT 4
+#define TASK1 0
+#define TASK2 1
+#define TASK3 2
+#define TASK4 3
 
+WDTASK g_tasks[TASK_COUNT] ;
 
 void cbTk1(void) {
   static uint8_t l_led = 0 ;
@@ -20,8 +25,13 @@ void cbTk2(void) {
   static uint8_t l_led = 0 ;
 
   l_led = 1 - l_led ;
-  if (l_led) PORTB |= _BV(PIN_LED2) ;
-    else PORTB &= ~_BV(PIN_LED2) ;
+  if (l_led) {
+    PORTB |= _BV(PIN_LED2) ;
+    WdTask_Pause(TASK3) ;
+  } else {
+    PORTB &= ~_BV(PIN_LED2) ;
+    WdTask_Unpause(TASK3) ;
+  }
 }
 
 void cbTk3(void) {
@@ -47,15 +57,16 @@ void Init_Pins(void) {
 }
 
 void Init_Tasks(void) {
-  WdSched_Init(WDTO_250MS) ;
-  tk1 = WdTask_New(1,&cbTk1) ;
-  tk2 = WdTask_New(50,&cbTk2) ;
-  tk3 = WdTask_New(10,&cbTk3) ;
-  tk4 = WdTask_New(40,&cbTk4) ;
-  WdTask_Enable(tk1) ;
-  WdTask_Enable(tk2) ;
-  WdTask_Enable(tk3) ;
-  WdTask_Enable(tk4) ;
+  WdSched_Init(g_tasks,TASK_COUNT,WDTO_15MS) ;
+
+  WdTask_Init(TASK1,25,&cbTk1) ;
+  WdTask_Init(TASK2,150,&cbTk2) ;
+  WdTask_Init(TASK3,10,&cbTk3) ;
+  WdTask_Init(TASK4,40,&cbTk4) ;
+  WdTask_Enable(TASK1) ;
+  WdTask_Enable(TASK2) ;
+  WdTask_Enable(TASK3) ;
+  WdTask_Enable(TASK4) ;
 }
 
 
