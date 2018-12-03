@@ -1,5 +1,7 @@
 #include "wdtasks.h"
 
+#define WDTASKS_LIGHT_SLEEP
+
 #define PIN_LED1 PB1
 #define PIN_LED2 PB2
 #define PIN_LED3 PB3
@@ -57,7 +59,7 @@ void Init_Pins(void) {
 }
 
 void Init_Tasks(void) {
-  WdSched_Init(g_tasks,TASK_COUNT,WDTO_15MS) ;
+  WdSched_Init(g_tasks,TASK_COUNT,WDTO_60MS) ;
 
   WdTask_Init(TASK1,25,&cbTk1) ;
   WdTask_Init(TASK2,150,&cbTk2) ;
