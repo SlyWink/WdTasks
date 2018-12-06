@@ -9,11 +9,15 @@ typedef struct {
 } WDTASK ;
 
 void WdSched_Init(WDTASK *p_tasks, uint8_t p_count, uint8_t p_wdtime) ;
-uint8_t WdTask_Init(uint8_t p_tasknum, uint8_t p_trigger, void *p_callback) ;
-uint8_t WdTask_Enable(uint8_t p_tasknum) ;
-uint8_t WdTask_Disable(uint8_t p_tasknum) ;
-uint8_t WdTask_Pause(uint8_t p_tasknum) ;
-uint8_t  WdTask_Unpause(uint8_t p_tasknum) ;
+void WdTask_Init(uint8_t p_tasknum, uint8_t p_trigger, void *p_callback) ;
+void WdTask_Enable(uint8_t p_tasknum) ;
+void WdTask_EnableDelayed(uint8_t p_tasknum) ;
+void  WdTask_Disable(uint8_t p_tasknum) ;
+void WdTask_Pause(uint8_t p_tasknum) ;
+void  WdTask_Unpause(uint8_t p_tasknum) ;
 uint8_t WdTask_IsEnabled(uint8_t p_tasknum) ;
+uint8_t WdTask_FirstCall(uint8_t p_tasknum) ;
+void WdTask_SetTrigger(uint8_t p_tasknum, uint8_t p_trigger) ;
 int8_t WdSched_CurrentTask(void) ;
 void WdSched_Run(void) ;
+

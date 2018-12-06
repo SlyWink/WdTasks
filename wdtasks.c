@@ -6,8 +6,10 @@
 #include <avr/sleep.h>
 #endif
 
-#define WDTASK_ENABLED 1
-#define WDTASK_PAUSED  2
+#define WDTASK_FLAG_ENABLED 1
+#define WDTASK_FLAG_PAUSED  2
+#define WDTASK_FLAG_DELAYED 4
+#define WDTASK_FLAG_CALLED  8
 
 struct {
   WDTASK  *tasks ;
@@ -46,53 +48,67 @@ void WdSched_Init(WDTASK *p_tasks, uint8_t p_count, uint8_t p_wdtime) {
 }
 
 
-uint8_t WdTask_Init(uint8_t p_tasknum, uint8_t p_trigger, void *p_callback) {
+void WdTask_Init(uint8_t p_tasknum, uint8_t p_trigger, void *p_callback) {
   WDTASK *l_wdt ;
 
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
   l_wdt = &(_wdsched.tasks[p_tasknum]) ;
   l_wdt->trigger = p_trigger ;
   l_wdt->callback = p_callback ;
   l_wdt->flags = 0 ;
-  return 1 ;
 }
 
 
-uint8_t WdTask_Enable(uint8_t p_tasknum) {
+void _WdTask_EnableFlagged(uint8_t p_tasknum, uint8_t p_flag) {
   WDTASK *l_wdt ;
 
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
   l_wdt = &(_wdsched.tasks[p_tasknum]) ;
   l_wdt->ticks = 0 ;
-  l_wdt->flags |= WDTASK_ENABLED ;
-  return 1 ;
+  l_wdt->flags |= (WDTASK_FLAG_ENABLED | p_flag) ;
 }
 
 
-uint8_t WdTask_Disable(uint8_t p_tasknum) {
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
-  _wdsched.tasks[p_tasknum].flags &= ~WDTASK_ENABLED ;
-  return 1 ;
+void WdTask_Enable(uint8_t p_tasknum) {
+  _WdTask_EnableFlagged(p_tasknum,0) ;
 }
 
 
-uint8_t WdTask_Pause(uint8_t p_tasknum) {
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
-  _wdsched.tasks[p_tasknum].flags |= WDTASK_PAUSED ;
-  return 1 ;
+void WdTask_EnableDelayed(uint8_t p_tasknum) {
+  _WdTask_EnableFlagged(p_tasknum,WDTASK_FLAG_DELAYED) ;
 }
 
 
-uint8_t WdTask_Unpause(uint8_t p_tasknum) {
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
-  _wdsched.tasks[p_tasknum].flags &= ~WDTASK_PAUSED ;
-  return 1 ;
+void WdTask_Disable(uint8_t p_tasknum) {
+  _wdsched.tasks[p_tasknum].flags &= ~WDTASK_FLAG_ENABLED ;
+}
+
+
+void WdTask_Pause(uint8_t p_tasknum) {
+  _wdsched.tasks[p_tasknum].flags |= WDTASK_FLAG_PAUSED ;
+}
+
+
+void WdTask_Unpause(uint8_t p_tasknum) {
+  _wdsched.tasks[p_tasknum].flags &= ~WDTASK_FLAG_PAUSED ;
 }
 
 
 uint8_t WdTask_IsEnabled(uint8_t p_tasknum) {
   if (p_tasknum >= _wdsched.taskcount) return 0 ;
-  return _wdsched.tasks[p_tasknum].flags & WDTASK_ENABLED ;
+  return _wdsched.tasks[p_tasknum].flags & WDTASK_FLAG_ENABLED ;
+}
+
+
+uint8_t WdTask_FirstCall(uint8_t p_tasknum) {
+  return ((_wdsched.tasks[p_tasknum].flags & WDTASK_FLAG_CALLED) == 0) ;
+}
+
+
+void WdTask_SetTrigger(uint8_t p_tasknum, uint8_t p_trigger) {
+  WDTASK *l_wdt ;
+
+  l_wdt = &(_wdsched.tasks[p_tasknum]) ;
+  l_wdt->trigger = p_trigger ;
+  l_wdt->ticks = 0 ;
 }
 
 
@@ -108,11 +124,16 @@ void WdSched_Run(void) {
   if (l_wdticks != _wd_ticks) {
     for (_wdsched.current=0 ; _wdsched.current<_wdsched.taskcount ; _wdsched.current++) {
       l_wdt = &(_wdsched.tasks[_wdsched.current]) ;
-      if ((l_wdt->flags & (WDTASK_ENABLED|WDTASK_PAUSED)) != WDTASK_ENABLED) continue ;
-      if (++(l_wdt->ticks) == l_wdt->trigger) {
-        (*(l_wdt->callback))() ;
-        l_wdt->ticks = 0 ;
+      if ((l_wdt->flags & (WDTASK_FLAG_ENABLED|WDTASK_FLAG_PAUSED)) != WDTASK_FLAG_ENABLED) continue ;
+      if (!l_wdt->ticks) {
+        if (l_wdt->flags & WDTASK_FLAG_DELAYED)
+          l_wdt->flags &= ~WDTASK_FLAG_DELAYED ;
+        else {
+          (*(l_wdt->callback))() ;
+          l_wdt->flags |= WDTASK_FLAG_CALLED ;
+        }
       }
+      if (++(l_wdt->ticks) == l_wdt->trigger) l_wdt->ticks = 0 ;
     }
     l_wdticks = _wd_ticks ;
 #if defined(WDTASKS_LIGHT_SLEEP) || defined(WDTASKS_DEEP_SLEEP)

@@ -50,6 +50,7 @@ void cbTk4(void) {
   l_led = 1 - l_led ;
   if (l_led) PORTB |= _BV(PIN_LED4) ;
     else PORTB &= ~_BV(PIN_LED4) ;
+  if (WdTask_FirstCall(WdSched_CurrentTask())) WdTask_SetTrigger(WdSched_CurrentTask(),10) ;
 }
 
 
@@ -64,11 +65,11 @@ void Init_Tasks(void) {
   WdTask_Init(TASK1,25,&cbTk1) ;
   WdTask_Init(TASK2,150,&cbTk2) ;
   WdTask_Init(TASK3,10,&cbTk3) ;
-  WdTask_Init(TASK4,40,&cbTk4) ;
+  WdTask_Init(TASK4,100,&cbTk4) ;
   WdTask_Enable(TASK1) ;
   WdTask_Enable(TASK2) ;
   WdTask_Enable(TASK3) ;
-  WdTask_Enable(TASK4) ;
+  WdTask_EnableDelayed(TASK4) ;
 }
 
 
