@@ -117,6 +117,11 @@ int8_t WdSched_CurrentTask(void) {
 }
 
 
+uint8_t WdSched_Ticks(void) {
+  return _wd_ticks ;
+}
+
+
 void WdSched_Run(void) {
   static uint8_t l_wdticks = 0 ;
   WDTASK *l_wdt ;

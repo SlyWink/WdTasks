@@ -19,5 +19,5 @@ uint8_t WdTask_IsEnabled(uint8_t p_tasknum) ;
 uint8_t WdTask_FirstCall(uint8_t p_tasknum) ;
 void WdTask_SetTrigger(uint8_t p_tasknum, uint8_t p_trigger) ;
 int8_t WdSched_CurrentTask(void) ;
+uint8_t WdSched_Ticks(void) ;
 void WdSched_Run(void) ;
-
