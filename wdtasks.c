@@ -98,8 +98,8 @@ uint8_t WdTask_IsEnabled(uint8_t p_tasknum) {
 }
 
 
-uint8_t WdTask_FirstCall(uint8_t p_tasknum) {
-  return ((_wdsched.tasks[p_tasknum].flags & WDTASK_FLAG_CALLED) == 0) ;
+uint8_t WdSched_FirstCall(void) {
+  return ((_wdsched.tasks[_wdsched.current].flags & WDTASK_FLAG_CALLED) == 0) ;
 }
 
 

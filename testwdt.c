@@ -50,7 +50,7 @@ void cbTk4(void) {
   l_led = 1 - l_led ;
   if (l_led) PORTB |= _BV(PIN_LED4) ;
     else PORTB &= ~_BV(PIN_LED4) ;
-  if (WdTask_FirstCall(WdSched_CurrentTask())) WdTask_SetTrigger(WdSched_CurrentTask(),10) ;
+  if (WdSched_FirstCall()) WdTask_SetTrigger(WdSched_CurrentTask(),10) ;
 }
 
 
