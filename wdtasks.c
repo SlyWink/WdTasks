@@ -6,23 +6,40 @@
 #include <avr/sleep.h>
 #endif
 
-#define WDTASK_FLAG_ENABLED 1
-#define WDTASK_FLAG_PAUSED  2
-#define WDTASK_FLAG_DELAYED 4
-#define WDTASK_FLAG_CALLED  8
-
 struct {
   WDTASK  *tasks ;
-  uint8_t taskcount ;
+  uint8_t taskinfos ;
   int8_t current ;
 } _wdsched ;
 
-static volatile uint8_t _wd_ticks = 0 ;
+#define WDSCHED_TASK_COUNT_BITS 5
+#define WDSCHED_TASK_COUNT_LAST 31
+#define WDSCHED_TASK_COUNT_MASK 0b00011111
+
+#define _WdSched_IncrTaskCount() _wdsched.taskinfos++
+#define _WdSched_GetTaskCount()  (_wdsched.taskinfos & WDSCHED_TASK_COUNT_MASK)
+
+#define WDSCHED_PRIORITY_BITS 3
+#define WDSCHED_PRIORITY_LAST 7
+#define WDSCHED_PRIORITY_MASK 0b11100000
+
+#define _WdSched_GetHighestPriority()     ((_wdsched.taskinfos & WDSCHED_PRIORITY_MASK) >> WDSCHED_TASK_COUNT_BITS)
+#define _WdSched_SetHighestPriority(prio) _wdsched.taskinfos = ((_wdsched.taskinfos & WDSCHED_TASK_COUNT_MASK) | (prio << WDSCHED_TASK_COUNT_BITS))
+
+#define WDTASK_PRIORITY_MASK 0b00000111
+#define WDTASK_FLAG_ENABLED  0b00010000
+#define WDTASK_FLAG_PAUSED   0b00100000
+#define WDTASK_FLAG_DELAYED  0b01000000
+#define WDTASK_FLAG_CALLED   0b10000000
+
+#define _WdTask_GetPriority(taskptr) (taskptr->flags & WDTASK_PRIORITY_MASK)
+
+static volatile uint8_t _wdsched_clock = 0 ;
 
 
 ISR(WDT_vect) {
   WDTCR |= _BV(WDIE) | _BV(WDE) ;
-  _wd_ticks++ ;
+  _wdsched_clock++ ;
 }
 
 
@@ -33,9 +50,8 @@ void _Set_WdTimebase(uint8_t p_wdp) {
 }
 
 
-void WdSched_Init(WDTASK *p_tasks, uint8_t p_count, uint8_t p_wdtime) {
+void WdSched_Init(WDTASK *p_tasks, uint8_t p_wdtime) {
   _wdsched.tasks = p_tasks ;
-  _wdsched.taskcount = p_count ;
   _wdsched.current = -1 ;
   _Set_WdTimebase(p_wdtime) ;
   sei() ;
@@ -48,17 +64,23 @@ void WdSched_Init(WDTASK *p_tasks, uint8_t p_count, uint8_t p_wdtime) {
 }
 
 
-void WdTask_Init(uint8_t p_tasknum, uint8_t p_trigger, void *p_callback) {
+int8_t WdTask_Init(uint8_t p_trigger, uint8_t p_priority, void *p_callback) {
+  int8_t l_tasknum ;
   WDTASK *l_wdt ;
 
-  l_wdt = &(_wdsched.tasks[p_tasknum]) ;
+  l_tasknum = _WdSched_GetTaskCount() ;
+  if ((l_tasknum == WDSCHED_TASK_COUNT_LAST) || (p_priority > WDSCHED_PRIORITY_LAST)) return -1 ;
+  l_wdt = &(_wdsched.tasks[l_tasknum]) ;
   l_wdt->trigger = p_trigger ;
   l_wdt->callback = p_callback ;
-  l_wdt->flags = 0 ;
+  l_wdt->flags = p_priority ;
+  if (p_priority > _WdSched_GetHighestPriority()) _WdSched_SetHighestPriority(p_priority) ;
+  _WdSched_IncrTaskCount() ;
+  return l_tasknum ;
 }
 
 
-void _WdTask_EnableFlagged(uint8_t p_tasknum, uint8_t p_flag) {
+void _WdTask_EnableFlagged(int8_t p_tasknum, uint8_t p_flag) {
   WDTASK *l_wdt ;
 
   l_wdt = &(_wdsched.tasks[p_tasknum]) ;
@@ -67,33 +89,33 @@ void _WdTask_EnableFlagged(uint8_t p_tasknum, uint8_t p_flag) {
 }
 
 
-void WdTask_Enable(uint8_t p_tasknum) {
+void WdTask_Enable(int8_t p_tasknum) {
   _WdTask_EnableFlagged(p_tasknum,0) ;
 }
 
 
-void WdTask_EnableDelayed(uint8_t p_tasknum) {
+void WdTask_EnableDelayed(int8_t p_tasknum) {
   _WdTask_EnableFlagged(p_tasknum,WDTASK_FLAG_DELAYED) ;
 }
 
 
-void WdTask_Disable(uint8_t p_tasknum) {
+void WdTask_Disable(int8_t p_tasknum) {
   _wdsched.tasks[p_tasknum].flags &= ~WDTASK_FLAG_ENABLED ;
 }
 
 
-void WdTask_Pause(uint8_t p_tasknum) {
+void WdTask_Pause(int8_t p_tasknum) {
   _wdsched.tasks[p_tasknum].flags |= WDTASK_FLAG_PAUSED ;
 }
 
 
-void WdTask_Unpause(uint8_t p_tasknum) {
+void WdTask_Unpause(int8_t p_tasknum) {
   _wdsched.tasks[p_tasknum].flags &= ~WDTASK_FLAG_PAUSED ;
 }
 
 
-uint8_t WdTask_IsEnabled(uint8_t p_tasknum) {
-  if (p_tasknum >= _wdsched.taskcount) return 0 ;
+uint8_t WdTask_IsEnabled(int8_t p_tasknum) {
+  if (p_tasknum >= _WdSched_GetTaskCount()) return 0 ;
   return _wdsched.tasks[p_tasknum].flags & WDTASK_FLAG_ENABLED ;
 }
 
@@ -103,7 +125,7 @@ uint8_t WdSched_FirstCall(void) {
 }
 
 
-void WdTask_SetTrigger(uint8_t p_tasknum, uint8_t p_trigger) {
+void WdTask_SetTrigger(int8_t p_tasknum, uint8_t p_trigger) {
   WDTASK *l_wdt ;
 
   l_wdt = &(_wdsched.tasks[p_tasknum]) ;
@@ -117,30 +139,36 @@ int8_t WdSched_CurrentTask(void) {
 }
 
 
-uint8_t WdSched_Ticks(void) {
-  return _wd_ticks ;
+uint8_t WdSched_Clock(void) {
+  return _wdsched_clock ;
 }
 
 
 void WdSched_Run(void) {
-  static uint8_t l_wdticks = 0 ;
+  static uint8_t l_clock = 0 ;
+  static uint8_t l_priority = 0 ;
   WDTASK *l_wdt ;
 
-  if (l_wdticks != _wd_ticks) {
-    for (_wdsched.current=0 ; _wdsched.current<_wdsched.taskcount ; _wdsched.current++) {
+  if (l_clock != _wdsched_clock) {
+    for (_wdsched.current=0 ; _wdsched.current<_WdSched_GetTaskCount() ; _wdsched.current++) {
       l_wdt = &(_wdsched.tasks[_wdsched.current]) ;
       if ((l_wdt->flags & (WDTASK_FLAG_ENABLED|WDTASK_FLAG_PAUSED)) != WDTASK_FLAG_ENABLED) continue ;
       if (!l_wdt->ticks) {
-        if (l_wdt->flags & WDTASK_FLAG_DELAYED)
-          l_wdt->flags &= ~WDTASK_FLAG_DELAYED ;
-        else {
-          (*(l_wdt->callback))() ;
-          l_wdt->flags |= WDTASK_FLAG_CALLED ;
+        if (l_priority >= _WdTask_GetPriority(l_wdt)) {
+          if (l_wdt->flags & WDTASK_FLAG_DELAYED)
+            l_wdt->flags &= ~WDTASK_FLAG_DELAYED ;
+          else {
+            (*(l_wdt->callback))() ;
+            l_wdt->flags |= WDTASK_FLAG_CALLED ;
+          }
+          l_wdt->ticks = 1 ;
         }
-      }
-      if (++(l_wdt->ticks) == l_wdt->trigger) l_wdt->ticks = 0 ;
+      } else
+        l_wdt->ticks++ ;
+      if (l_wdt->ticks == l_wdt->trigger) l_wdt->ticks = 0 ;
     }
-    l_wdticks = _wd_ticks ;
+    l_clock = _wdsched_clock ;
+    if (++l_priority > _WdSched_GetHighestPriority()) l_priority = 0 ;
 #if defined(WDTASKS_LIGHT_SLEEP) || defined(WDTASKS_DEEP_SLEEP)
     sleep_mode() ;
 #endif
