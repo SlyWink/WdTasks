@@ -34,7 +34,13 @@ struct {
 
 #define _WdTask_GetPriority(taskptr) (taskptr->flags & WDTASK_PRIORITY_MASK)
 
+#ifdef WDTASKS_CLOCK_16
+static volatile uint16_t _wdsched_clock = 0 ;
+#elif defined WDTASKS_CLOCK_32
+static volatile uint32_t _wdsched_clock = 0 ;
+#else
 static volatile uint8_t _wdsched_clock = 0 ;
+#endif
 
 
 ISR(WDT_vect) {
@@ -139,13 +145,25 @@ int8_t WdSched_CurrentTask(void) {
 }
 
 
+#ifdef WDTASKS_CLOCK_16
+uint16_t WdSched_Clock(void) {
+#elif defined WDTASKS_CLOCK_32
+uint32_t WdSched_Clock(void) {
+#else
 uint8_t WdSched_Clock(void) {
+#endif
   return _wdsched_clock ;
 }
 
 
 void WdSched_Run(void) {
+#ifdef WDTASKS_CLOCK_16
+  static uint16_t l_clock = 0 ;
+#elif defined WDTASKS_CLOCK_32
+  static uint32_t l_clock = 0 ;
+#else
   static uint8_t l_clock = 0 ;
+#endif
   static uint8_t l_priority = 0 ;
   WDTASK *l_wdt ;
 
